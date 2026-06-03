@@ -1,40 +1,54 @@
-#Default workflow: index genome FASTAs (gunzip + samtools + GATK + BWA). 
+# Default workflow: index genome FASTAs (gunzip + samtools + GATK + BWA). 
+
+import csv
+import re
+from pathlib import Path
 
 configfile: "../config/config.yaml"
 include: "rules/common.smk"
 
+SRC = Path(config["source_dir"])
 
-def genome_targets():
-    return [ref_done_path(r) for r in GENOMES]
+ROWS = load_samples(config["samples_csv"])
+ROW_BY_ID = {r["row_id"]: r for r in ROWS}
+GENOMES = [r for r in ROWS if r["file_type"] == "genome"]
+GENOME_LOOKUP = {(r["source"], r["haplotype"]): r for r in GENOMES}
+
+ASM = lambda r: Path(r["file"].replace(".gz", "")).stem
+
+SOURCES = [r["source"] for r in GENOMES]
+HAPLOTYPES = [r["haplotype"] for r in GENOMES]
+ASSEMBLIES = [ASM(r) for r in GENOMES]
+
+print(SOURCES)
+print(HAPLOTYPES)
+print(ASSEMBLIES)
+
+wildcard_constraints:
+    source="|".join(SOURCES),
+    haplotype="|".join(HAPLOTYPES),
+    assembly="|".join(ASSEMBLIES)
 
 
 rule all:
     input:
-        genome_targets()
+        f"{SRC}/ref_indexing.done",
 
 
 rule decompress_genome:
     input:
         lambda wc: raw_path(genome_row(wc)),
     output:
-        ref="results/{source}/{haplotype}/{assembly}.fna",
-    wildcard_constraints:
-        source=WC_SRC,
-        haplotype=WC_HAP,
-        assembly=WC_ASM,
+        ref=f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna",
     shell:
-        "mkdir -p $(dirname {output.ref}) && gzip -dc {input} > {output.ref}"
+        "gzip -dc {input} > {output.ref}"
 
 
 rule samtools_faidx:
     input:
         ref=rules.decompress_genome.output.ref,
     output:
-        "results/{source}/{haplotype}/{assembly}.fna.fai",
-    wildcard_constraints:
-        source=WC_SRC,
-        haplotype=WC_HAP,
-        assembly=WC_ASM,
+        f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna.fai",
     conda:
         "envs/ref.yaml",
     shell:
@@ -45,11 +59,7 @@ rule gatk_sequence_dictionary:
     input:
         ref=rules.decompress_genome.output.ref,
     output:
-        "results/{source}/{haplotype}/{assembly}.dict",
-    wildcard_constraints:
-        source=WC_SRC,
-        haplotype=WC_HAP,
-        assembly=WC_ASM,
+        f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.dict",
     conda:
         "envs/ref.yaml",
     shell:
@@ -61,16 +71,12 @@ rule bwa_index:
         ref=rules.decompress_genome.output.ref,
     output:
         multiext(
-            "results/{source}/{haplotype}/{assembly}.fna",
+            f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna",
             ".amb",
             ".ann",
             ".bwt",
             ".pac",
         ),
-    wildcard_constraints:
-        source=WC_SRC,
-        haplotype=WC_HAP,
-        assembly=WC_ASM,
     conda:
         "envs/ref.yaml",
     shell:
@@ -79,14 +85,10 @@ rule bwa_index:
 
 rule genome_ref_done:
     input:
-        rules.samtools_faidx.output,
-        rules.gatk_sequence_dictionary.output,
-        rules.bwa_index.output,
+        expand(rules.samtools_faidx.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES),
+        expand(rules.gatk_sequence_dictionary.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES),
+        expand(rules.bwa_index.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES)
     output:
-        "results/{source}/{haplotype}/{assembly}.ref.done",
-    wildcard_constraints:
-        source=WC_SRC,
-        haplotype=WC_HAP,
-        assembly=WC_ASM,
+        f"{SRC}/ref_indexing.done",
     shell:
         "touch {output}"
