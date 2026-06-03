@@ -2,7 +2,6 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - samtools=1.21
-  - bwa-mem2=2.3
-  - gatk4=4.6.2.0
+  - python=3.12
+  - snakemake=9.21.0
 

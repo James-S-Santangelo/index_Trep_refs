@@ -1,0 +1,91 @@
+# Default workflow: index genome FASTAs (gunzip + samtools + GATK + BWA). 
+
+import csv
+import re
+from pathlib import Path
+
+configfile: "../config/config.yaml"
+include: "rules/common.smk"
+
+SRC = Path(config["source_dir"])
+
+ROWS = load_samples(config["samples_csv"])
+ROW_BY_ID = {r["row_id"]: r for r in ROWS}
+GENOMES = [r for r in ROWS if r["file_type"] == "genome"]
+GENOME_LOOKUP = {(r["source"], r["haplotype"]): r for r in GENOMES}
+
+ASM = lambda r: Path(r["file"].replace(".gz", "")).stem
+
+SOURCES = [r["source"] for r in GENOMES]
+HAPLOTYPES = [r["haplotype"] for r in GENOMES]
+ASSEMBLIES = [ASM(r) for r in GENOMES]
+
+
+wildcard_constraints:
+    source="|".join(SOURCES),
+    haplotype="|".join(HAPLOTYPES),
+    assembly="|".join(ASSEMBLIES)
+
+
+rule all:
+    input:
+        f"{SRC}/ref_indexing.done",
+
+
+rule decompress_genome:
+    input:
+        lambda wc: raw_path(genome_row(wc)),
+    output:
+        ref=f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna",
+    shell:
+        "gzip -dc {input} > {output.ref}"
+
+
+rule samtools_faidx:
+    input:
+        ref=rules.decompress_genome.output.ref,
+    output:
+        f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna.fai",
+    conda:
+        "envs/ref.yaml",
+    shell:
+        "samtools faidx {input.ref}"
+
+
+rule gatk_sequence_dictionary:
+    input:
+        ref=rules.decompress_genome.output.ref,
+    output:
+        f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.dict",
+    conda:
+        "envs/ref.yaml",
+    shell:
+        "gatk CreateSequenceDictionary -R {input.ref} -O {output}"
+
+
+rule bwa_index:
+    input:
+        ref=rules.decompress_genome.output.ref,
+    output:
+        multiext(
+            f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna",
+            ".amb",
+            ".ann",
+            ".bwt",
+            ".pac",
+        ),
+    conda:
+        "envs/ref.yaml",
+    shell:
+        "bwa index {input.ref}"
+
+
+rule genome_ref_done:
+    input:
+        expand(rules.samtools_faidx.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES),
+        expand(rules.gatk_sequence_dictionary.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES),
+        expand(rules.bwa_index.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES)
+    output:
+        f"{SRC}/ref_indexing.done",
+    shell:
+        "touch {output}"
