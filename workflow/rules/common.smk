@@ -1,4 +1,7 @@
-# Keep custom Python functions
+# Shared helpers for workflow/Snakefile (and optional prep_aux / mapping).
+
+import csv
+
 
 def load_samples(path):
     with open(path, newline="") as f:
@@ -8,14 +11,3 @@ def load_samples(path):
             r[k] = (r[k] or "").strip()
         r["row_id"] = f"{i:04d}"
     return rows
-
-
-def genome_row(wc):
-    r = GENOME_LOOKUP[(wc.source, wc.haplotype)]
-    if wc.assembly != ASM(r):
-        raise ValueError("assembly wildcard mismatch")
-    return r
-
-
-def raw_path(r):
-    return str(SRC / r["source"] / r["file"])

@@ -1,6 +1,7 @@
-# Default workflow: index genome FASTAs (gunzip + samtools + GATK + BWA). 
+# Default workflow: index genome FASTAs (gunzip + samtools + GATK + BWA).
+# Run from repo root:
+#   snakemake -s workflow/Snakefile --directory workflow --cores 4 -p --use-conda
 
-import csv
 import re
 from pathlib import Path
 
@@ -8,6 +9,8 @@ configfile: "../config/config.yaml"
 include: "rules/common.smk"
 
 SRC = Path(config["source_dir"])
+LOG = config.get("logs_dir", "/scratch/odrew060/index_Trep_refs/indexing_logs")
+DONE = config.get("done_flag", "/scratch/odrew060/index_Trep_refs/ref_indexing.done")
 
 ROWS = load_samples(config["samples_csv"])
 ROW_BY_ID = {r["row_id"]: r for r in ROWS}
@@ -20,16 +23,30 @@ SOURCES = [r["source"] for r in GENOMES]
 HAPLOTYPES = [r["haplotype"] for r in GENOMES]
 ASSEMBLIES = [ASM(r) for r in GENOMES]
 
+SOURCE_SET = sorted(set(SOURCES))
+HAP_SET = sorted(set(HAPLOTYPES))
+
+
+def genome_row(wc):
+    r = GENOME_LOOKUP[(wc.source, wc.haplotype)]
+    if wc.assembly != ASM(r):
+        raise ValueError("assembly wildcard mismatch")
+    return r
+
+
+def raw_path(r):
+    return str(SRC / r["source"] / r["file"])
+
 
 wildcard_constraints:
-    source="|".join(SOURCES),
-    haplotype="|".join(HAPLOTYPES),
-    assembly="|".join(ASSEMBLIES)
+    source="|".join(re.escape(s) for s in SOURCE_SET),
+    haplotype="|".join(re.escape(h) for h in HAP_SET),
+    assembly="|".join(re.escape(a) for a in ASSEMBLIES),
 
 
 rule all:
     input:
-        f"{SRC}/ref_indexing.done",
+        DONE,
 
 
 rule decompress_genome:
@@ -37,8 +54,10 @@ rule decompress_genome:
         lambda wc: raw_path(genome_row(wc)),
     output:
         ref=f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna",
+    log:
+        f"{LOG}/decompress_genome/{{source}}_{{haplotype}}_{{assembly}}.log",
     shell:
-        "gzip -dc {input} > {output.ref}"
+        "mkdir -p $(dirname {output.ref}) && gzip -dc {input} > {output.ref} 2> {log}"
 
 
 rule samtools_faidx:
@@ -46,10 +65,12 @@ rule samtools_faidx:
         ref=rules.decompress_genome.output.ref,
     output:
         f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna.fai",
+    log:
+        f"{LOG}/samtools_faidx/{{source}}_{{haplotype}}_{{assembly}}.log",
     conda:
         "envs/ref.yaml",
     shell:
-        "samtools faidx {input.ref}"
+        "samtools faidx {input.ref} 2> {log}"
 
 
 rule gatk_sequence_dictionary:
@@ -57,10 +78,12 @@ rule gatk_sequence_dictionary:
         ref=rules.decompress_genome.output.ref,
     output:
         f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.dict",
+    log:
+        f"{LOG}/gatk_sequence_dictionary/{{source}}_{{haplotype}}_{{assembly}}.log",
     conda:
         "envs/ref.yaml",
     shell:
-        "gatk CreateSequenceDictionary -R {input.ref} -O {output}"
+        "gatk CreateSequenceDictionary -R {input.ref} -O {output} 2> {log}"
 
 
 rule bwa_index:
@@ -74,18 +97,22 @@ rule bwa_index:
             ".bwt",
             ".pac",
         ),
+    log:
+        f"{LOG}/bwa_index/{{source}}_{{haplotype}}_{{assembly}}.log",
     conda:
         "envs/ref.yaml",
     shell:
-        "bwa index {input.ref}"
+        "bwa index {input.ref} 2> {log}"
 
 
 rule genome_ref_done:
     input:
         expand(rules.samtools_faidx.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES),
         expand(rules.gatk_sequence_dictionary.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES),
-        expand(rules.bwa_index.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES)
+        expand(rules.bwa_index.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES),
     output:
-        f"{SRC}/ref_indexing.done",
+        DONE,
+    log:
+        f"{LOG}/genome_ref_done/ref_indexing.done.log",
     shell:
-        "touch {output}"
+        "mkdir -p $(dirname {output}) && touch {output} 2> {log}"
