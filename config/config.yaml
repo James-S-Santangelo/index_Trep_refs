@@ -1,8 +1,2 @@
 source_dir: "/scratch/references/trifolium/repens"
-samples_csv: "samples.csv"
-reads_csv: "reads.csv"
-results_dir: "results"
-mapping_dir: "mapping"
-
-mapping:
-  threads: 8
+samples_csv: "../resources/samples.csv"
