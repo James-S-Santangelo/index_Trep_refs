@@ -15,23 +15,20 @@ DONE = config.get("done_flag", "/scratch/odrew060/index_Trep_refs/ref_indexing.d
 ROWS = load_samples(config["samples_csv"])
 ROW_BY_ID = {r["row_id"]: r for r in ROWS}
 GENOMES = [r for r in ROWS if r["file_type"] == "genome"]
-GENOME_LOOKUP = {(r["source"], r["haplotype"]): r for r in GENOMES}
 
 ASM = lambda r: Path(r["file"].replace(".gz", "")).stem
 
+GENOME_LOOKUP = {(r["source"], ASM(r)): r for r in GENOMES}
+
 SOURCES = [r["source"] for r in GENOMES]
-HAPLOTYPES = [r["haplotype"] for r in GENOMES]
 ASSEMBLIES = [ASM(r) for r in GENOMES]
 
 SOURCE_SET = sorted(set(SOURCES))
-HAP_SET = sorted(set(HAPLOTYPES))
+ASSEMBLY_SET = sorted(set(ASSEMBLIES))
 
 
 def genome_row(wc):
-    r = GENOME_LOOKUP[(wc.source, wc.haplotype)]
-    if wc.assembly != ASM(r):
-        raise ValueError("assembly wildcard mismatch")
-    return r
+    return GENOME_LOOKUP[(wc.source, wc.assembly)]
 
 
 def raw_path(r):
@@ -40,8 +37,7 @@ def raw_path(r):
 
 wildcard_constraints:
     source="|".join(re.escape(s) for s in SOURCE_SET),
-    haplotype="|".join(re.escape(h) for h in HAP_SET),
-    assembly="|".join(re.escape(a) for a in ASSEMBLIES),
+    assembly="|".join(re.escape(a) for a in ASSEMBLY_SET),
 
 
 rule all:
@@ -55,7 +51,7 @@ rule decompress_genome:
     output:
         ref=f"{SRC}/{{source}}/{{assembly}}.fna",
     log:
-        f"{LOG}/decompress_genome/{{source}}_{{haplotype}}_{{assembly}}.log",
+        f"{LOG}/decompress_genome/{{source}}_{{assembly}}.log",
     shell:
         "mkdir -p $(dirname {output.ref}) && gzip -dc {input} > {output.ref} 2> {log}"
 
@@ -66,7 +62,7 @@ rule samtools_faidx:
     output:
         f"{SRC}/{{source}}/{{assembly}}.fna.fai",
     log:
-        f"{LOG}/samtools_faidx/{{source}}_{{haplotype}}_{{assembly}}.log",
+        f"{LOG}/samtools_faidx/{{source}}_{{assembly}}.log",
     conda:
         "envs/ref.yaml",
     shell:
@@ -79,7 +75,7 @@ rule gatk_sequence_dictionary:
     output:
         f"{SRC}/{{source}}/{{assembly}}.dict",
     log:
-        f"{LOG}/gatk_sequence_dictionary/{{source}}_{{haplotype}}_{{assembly}}.log",
+        f"{LOG}/gatk_sequence_dictionary/{{source}}_{{assembly}}.log",
     conda:
         "envs/ref.yaml",
     shell:
@@ -98,7 +94,7 @@ rule bwa_index:
             ".pac",
         ),
     log:
-        f"{LOG}/bwa_index/{{source}}_{{haplotype}}_{{assembly}}.log",
+        f"{LOG}/bwa_index/{{source}}_{{assembly}}.log",
     conda:
         "envs/ref.yaml",
     shell:
@@ -107,9 +103,9 @@ rule bwa_index:
 
 rule genome_ref_done:
     input:
-        expand(rules.samtools_faidx.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES),
-        expand(rules.gatk_sequence_dictionary.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES),
-        expand(rules.bwa_index.output, zip, source=SOURCES, haplotype=HAPLOTYPES, assembly=ASSEMBLIES),
+        expand(rules.samtools_faidx.output, zip, source=SOURCES, assembly=ASSEMBLIES),
+        expand(rules.gatk_sequence_dictionary.output, zip, source=SOURCES, assembly=ASSEMBLIES),
+        expand(rules.bwa_index.output, zip, source=SOURCES, assembly=ASSEMBLIES),
     output:
         DONE,
     log:
