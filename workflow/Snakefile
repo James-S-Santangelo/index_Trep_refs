@@ -53,7 +53,7 @@ rule decompress_genome:
     input:
         lambda wc: raw_path(genome_row(wc)),
     output:
-        ref=f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna",
+        ref=f"{SRC}/{{source}}/{{assembly}}.fna",
     log:
         f"{LOG}/decompress_genome/{{source}}_{{haplotype}}_{{assembly}}.log",
     shell:
@@ -64,7 +64,7 @@ rule samtools_faidx:
     input:
         ref=rules.decompress_genome.output.ref,
     output:
-        f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna.fai",
+        f"{SRC}/{{source}}/{{assembly}}.fna.fai",
     log:
         f"{LOG}/samtools_faidx/{{source}}_{{haplotype}}_{{assembly}}.log",
     conda:
@@ -77,7 +77,7 @@ rule gatk_sequence_dictionary:
     input:
         ref=rules.decompress_genome.output.ref,
     output:
-        f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.dict",
+        f"{SRC}/{{source}}/{{assembly}}.dict",
     log:
         f"{LOG}/gatk_sequence_dictionary/{{source}}_{{haplotype}}_{{assembly}}.log",
     conda:
@@ -91,7 +91,7 @@ rule bwa_index:
         ref=rules.decompress_genome.output.ref,
     output:
         multiext(
-            f"{SRC}/{{source}}/{{haplotype}}/{{assembly}}.fna",
+            f"{SRC}/{{source}}/{{assembly}}.fna",
             ".amb",
             ".ann",
             ".bwt",
