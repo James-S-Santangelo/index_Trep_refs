@@ -19,11 +19,3 @@ def genome_row(wc):
 
 def raw_path(r):
     return str(SRC / r["source"] / r["file"])
-
-
-def genome_fasta_path(r):
-    return str(OUT / r["source"] / r["haplotype"] / r["file"].replace(".gz", ""))
-
-
-def ref_done_path(r):
-    return f"results/{r['source']}/{r['haplotype']}/{ASM(r)}.ref.done"

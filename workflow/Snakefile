@@ -20,9 +20,6 @@ SOURCES = [r["source"] for r in GENOMES]
 HAPLOTYPES = [r["haplotype"] for r in GENOMES]
 ASSEMBLIES = [ASM(r) for r in GENOMES]
 
-print(SOURCES)
-print(HAPLOTYPES)
-print(ASSEMBLIES)
 
 wildcard_constraints:
     source="|".join(SOURCES),
