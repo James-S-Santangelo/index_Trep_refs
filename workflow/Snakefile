@@ -11,7 +11,7 @@ include: "rules/common.smk"
 
 
 SRC = Path(config["source_dir"])
-LOG = f"{SRC}/logs"
+LOG = f"{SRC}/Trep_ref_indexing_logs"
 ROWS = load_samples(config["samples_csv"])
 ROW_BY_ID = {r["row_id"]: r for r in ROWS}
 GENOMES = [r for r in ROWS if r["file_type"] == "genome"]
