@@ -1,12 +1,2 @@
 source_dir: "/scratch/references/trifolium/repens"
 samples_csv: "../resources/samples.csv"
-samples_annotations_csv: "../resources/samples.annotations.csv"
-reads_csv: "../reads.csv"
-results_dir: "results"
-mapping_dir: "mapping"
-# Pipeline logs + done flag (your scratch — not the shared reference folder)
-logs_dir: "/scratch/odrew060/index_Trep_refs/indexing_logs"
-done_flag: "/scratch/odrew060/index_Trep_refs/ref_indexing.done"
-
-mapping:
-  threads: 8

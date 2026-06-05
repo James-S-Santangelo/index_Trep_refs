@@ -5,24 +5,20 @@
 import re
 from pathlib import Path
 
+
 configfile: "../config/config.yaml"
 include: "rules/common.smk"
 
-SRC = Path(config["source_dir"])
-LOG = config.get("logs_dir", "/scratch/odrew060/index_Trep_refs/indexing_logs")
-DONE = config.get("done_flag", "/scratch/odrew060/index_Trep_refs/ref_indexing.done")
 
+SRC = Path(config["source_dir"])
+LOG = f"{SRC}/logs"
 ROWS = load_samples(config["samples_csv"])
 ROW_BY_ID = {r["row_id"]: r for r in ROWS}
 GENOMES = [r for r in ROWS if r["file_type"] == "genome"]
-
 ASM = lambda r: Path(r["file"].replace(".gz", "")).stem
-
 GENOME_LOOKUP = {(r["source"], ASM(r)): r for r in GENOMES}
-
 SOURCES = [r["source"] for r in GENOMES]
 ASSEMBLIES = [ASM(r) for r in GENOMES]
-
 SOURCE_SET = sorted(set(SOURCES))
 ASSEMBLY_SET = sorted(set(ASSEMBLIES))
 
@@ -42,7 +38,7 @@ wildcard_constraints:
 
 rule all:
     input:
-        DONE,
+        f"{SRC}/Trep_ref_indexing.done",
 
 
 rule decompress_genome:
@@ -101,14 +97,12 @@ rule bwa_index:
         "bwa index {input.ref} 2> {log}"
 
 
-rule genome_ref_done:
+rule Trep_ref_indexing_done:
     input:
         expand(rules.samtools_faidx.output, zip, source=SOURCES, assembly=ASSEMBLIES),
         expand(rules.gatk_sequence_dictionary.output, zip, source=SOURCES, assembly=ASSEMBLIES),
         expand(rules.bwa_index.output, zip, source=SOURCES, assembly=ASSEMBLIES),
     output:
-        DONE,
-    log:
-        f"{LOG}/genome_ref_done/ref_indexing.done.log",
+        f"{SRC}/Trep_ref_indexing.done",
     shell:
-        "mkdir -p $(dirname {output}) && touch {output} 2> {log}"
+        "touch {output}"
